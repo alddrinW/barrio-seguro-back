@@ -1,0 +1,317 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Barrio Seguro API",
+    "version": "1.0.0",
+    "description": "API RESTful integral para la gestion comunitaria de seguridad ciudadana, censo familiar barrial (200 a 250 familias por sector), mapeo geoespacial compatible con OpenStreetMap (WGS84 / GeoJSON), modulo preventivo de vigilancia para casas vacias y alertas de denuncias ciudadanas.",
+    "contact": {
+      "name": "Equipo de Desarrollo Barrio Seguro",
+      "email": "soporte@barrioseguro.ec"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/api",
+      "description": "Servidor de Desarrollo Local"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Ingrese el token JWT obtenido en /api/auth/login"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "data": { "type": "object" },
+          "error": { "type": "string" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "admin.floresta@barrioseguro.ec" },
+          "password": { "type": "string", "example": "Password123!" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["sectorId", "nationalId", "email", "password", "firstName", "lastName", "phone", "address"],
+        "properties": {
+          "sectorId": { "type": "string", "format": "uuid" },
+          "nationalId": { "type": "string", "example": "1719283746" },
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "example": "Password123!" },
+          "firstName": { "type": "string", "example": "Juan" },
+          "lastName": { "type": "string", "example": "Perez" },
+          "phone": { "type": "string", "example": "+593991234567" },
+          "address": { "type": "string", "example": "Calle Toledo N24-10" },
+          "familyUnitCode": { "type": "string", "example": "FAM-FLOR-008" },
+          "role": { "type": "string", "enum": ["RESIDENTE", "VECINO_LIDER", "ADMIN_SECTOR", "AUTORIDAD_POLICIAL"] }
+        }
+      },
+      "Sector": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "example": "Sector La Floresta" },
+          "code": { "type": "string", "example": "SEC-FLOR-01" },
+          "city": { "type": "string", "example": "Quito" },
+          "centerLat": { "type": "number", "example": -0.2104 },
+          "centerLng": { "type": "number", "example": -78.4891 },
+          "maxFamilies": { "type": "integer", "example": 250 },
+          "status": { "type": "string", "enum": ["ACTIVO", "INACTIVO", "EN_AUDITORIA"] }
+        }
+      },
+      "PoiLocation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "example": "Parque Las Retamas" },
+          "type": { "type": "string", "enum": ["AREA_VERDE", "PUNTO_SEGURO", "NEGOCIO", "PUNTO_TURISTICO", "MUNICIPIO", "INFOCENTRO"] },
+          "description": { "type": "string" },
+          "latitude": { "type": "number", "example": -0.2118 },
+          "longitude": { "type": "number", "example": -78.4872 },
+          "address": { "type": "string" },
+          "isVerified": { "type": "boolean" }
+        }
+      },
+      "VacantHouse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "propertyAddress": { "type": "string", "example": "Calle Vizcaya N24-110" },
+          "latitude": { "type": "number", "example": -0.2107 },
+          "longitude": { "type": "number", "example": -78.4892 },
+          "departureDate": { "type": "string", "format": "date-time" },
+          "returnDate": { "type": "string", "format": "date-time" },
+          "trustedNeighborName": { "type": "string", "example": "Don Roberto Benitez" },
+          "trustedNeighborPhone": { "type": "string", "example": "+593992233445" },
+          "emergencyContactPhone": { "type": "string", "example": "+593995566778" },
+          "status": { "type": "string", "enum": ["REGISTRADA", "VIGILANCIA_ACTIVA", "FINALIZADA", "CANCELADA"] }
+        }
+      },
+      "IncidentAlert": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "code": { "type": "string", "example": "ALR-2026-0001" },
+          "category": { "type": "string", "enum": ["ROBO_HURTO", "SOSPECHOSO", "DISTURBIO_ESCANDALO", "VIOLENCIA", "INFRAESTRUCTURA_DANADA", "ACCIDENTE_TRANSITO", "EMERGENCIA_MEDICA", "OTRO"] },
+          "severity": { "type": "string", "enum": ["BAJA", "MEDIA", "ALTA", "CRITICA"] },
+          "title": { "type": "string", "example": "Robo de accesorios vehiculares" },
+          "description": { "type": "string" },
+          "latitude": { "type": "number", "example": -0.2108 },
+          "longitude": { "type": "number", "example": -78.4889 },
+          "status": { "type": "string", "enum": ["EMITIDA", "EN_VERIFICACION", "PATRULLA_DESPACHADA", "RESUELTA", "FALSA_ALARMA"] },
+          "isAnonymous": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Iniciar sesion y obtener token JWT",
+        "tags": ["Autenticacion"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } }
+        },
+        "responses": {
+          "200": { "description": "Inicio de sesion exitoso con token firmado" },
+          "401": { "description": "Credenciales invalidas" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "summary": "Registro de residente o usuario en un sector",
+        "tags": ["Autenticacion"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } }
+        },
+        "responses": {
+          "201": { "description": "Usuario registrado exitosamente" },
+          "400": { "description": "Capacidad maxima del sector excedida (200-250 familias)" },
+          "409": { "description": "Cedula o correo duplicado" }
+        }
+      }
+    },
+    "/auth/profile": {
+      "get": {
+        "summary": "Consultar perfil del usuario autenticado",
+        "tags": ["Autenticacion"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Datos de perfil y sector asignado" } }
+      }
+    },
+    "/sectors": {
+      "get": {
+        "summary": "Listar sectores independientes y su ocupacion familiar",
+        "tags": ["Sectores"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Lista de sectores con capacidad de familias y coordenadas WGS84" } }
+      },
+      "post": {
+        "summary": "Crear un nuevo sector barrial independiente",
+        "tags": ["Sectores"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Sector registrado exitosamente" } }
+      }
+    },
+    "/sectors/{id}/stats": {
+      "get": {
+        "summary": "Estadisticas y censo territorial del sector",
+        "tags": ["Sectores"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Resumen de ocupacion familiar, POIs e incidentes" } }
+      }
+    },
+    "/users/census": {
+      "post": {
+        "summary": "Censar residente y validar tope de 200 a 250 familias en el sector",
+        "tags": ["Censo Barrial"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Residente censado con exito" },
+          "400": { "description": "Capacidad de familias agotada en el sector" }
+        }
+      }
+    },
+    "/pois": {
+      "get": {
+        "summary": "Listar puntos de interes (Areas verdes, puntos seguros, negocios, turismo, municipio, infocentros)",
+        "tags": ["Puntos de Interes y OpenStreetMap"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "sectorId", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["AREA_VERDE", "PUNTO_SEGURO", "NEGOCIO", "PUNTO_TURISTICO", "MUNICIPIO", "INFOCENTRO"] } }
+        ],
+        "responses": { "200": { "description": "Listado de POIs" } }
+      },
+      "post": {
+        "summary": "Registrar punto de interes geografico",
+        "tags": ["Puntos de Interes y OpenStreetMap"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Punto registrado exitosamente" } }
+      }
+    },
+    "/pois/geojson": {
+      "get": {
+        "summary": "Exportar puntos de interes en formato GeoJSON RFC 7946 para OpenStreetMap / Leaflet",
+        "tags": ["Puntos de Interes y OpenStreetMap"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "FeatureCollection GeoJSON con coordenadas [longitud, latitud]" } }
+      }
+    },
+    "/pois/nearby": {
+      "get": {
+        "summary": "Busqueda geoespacial por radio de proximidad (Haversine)",
+        "tags": ["Puntos de Interes y OpenStreetMap"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "lat", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "lng", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "radiusKm", "in": "query", "schema": { "type": "number", "default": 3 } }
+        ],
+        "responses": { "200": { "description": "Puntos ordenados por distancia euclidiana" } }
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Listar asambleas, mingas y reuniones barriales geolocalizadas",
+        "tags": ["Eventos y Participacion"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Eventos comunitarios" } }
+      },
+      "post": {
+        "summary": "Crear evento barrial geolocalizado en el mapa",
+        "tags": ["Eventos y Participacion"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Evento creado exitosamente" } }
+      }
+    },
+    "/events/{id}/attend": {
+      "post": {
+        "summary": "Confirmar asistencia a un evento comunitario",
+        "tags": ["Eventos y Participacion"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Asistencia registrada" } }
+      }
+    },
+    "/vacant-houses": {
+      "get": {
+        "summary": "Listar casas vacias con filtro de privacidad estricto por rol",
+        "tags": ["Casas Vacias (Prevencion)"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Casas notificadas para vigilancia preventiva" } }
+      },
+      "post": {
+        "summary": "Notificar ausencia temporal de vivienda por viaje",
+        "tags": ["Casas Vacias (Prevencion)"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Casa vacia registrada bajo protocolo de vigilancia" } }
+      }
+    },
+    "/vacant-houses/{id}/inspections": {
+      "post": {
+        "summary": "Registrar ronda de patrullaje policial en bitacora de vivienda",
+        "tags": ["Casas Vacias (Prevencion)"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "201": { "description": "Ronda registrada en la bitacora oficial" } }
+      }
+    },
+    "/incidents": {
+      "get": {
+        "summary": "Listar alertas y denuncias ciudadanas",
+        "tags": ["Denuncias Ciudadanas"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Listado de incidentes" } }
+      },
+      "post": {
+        "summary": "Emitir alerta o denuncia ciudadana geolocalizada",
+        "tags": ["Denuncias Ciudadanas"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Alerta emitida con codigo unico de seguimiento" } }
+      }
+    },
+    "/incidents/geojson": {
+      "get": {
+        "summary": "Exportar alertas ciudadanas en formato GeoJSON para OpenStreetMap",
+        "tags": ["Denuncias Ciudadanas"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "FeatureCollection GeoJSON de alertas activas" } }
+      }
+    },
+    "/incidents/{id}/status": {
+      "patch": {
+        "summary": "Actualizar estado de denuncia y registrar entrada en bitacora de atencion policial",
+        "tags": ["Denuncias Ciudadanas"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Estado actualizado y bitacora registrada" } }
+      }
+    },
+    "/dashboard/sector/{sectorId}": {
+      "get": {
+        "summary": "Metricas consolidadas del sector para directivas y autoridades",
+        "tags": ["Dashboard Barrial"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "sectorId", "in": "path", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Consolidado de censo, POIs, casas vacias e incidentes" } }
+      }
+    }
+  }
+}

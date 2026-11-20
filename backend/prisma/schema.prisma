@@ -1,0 +1,287 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN_SECTOR
+  VECINO_LIDER
+  RESIDENTE
+  AUTORIDAD_POLICIAL
+}
+
+enum SectorStatus {
+  ACTIVO
+  INACTIVO
+  EN_AUDITORIA
+}
+
+enum PoiType {
+  AREA_VERDE
+  PUNTO_SEGURO
+  NEGOCIO
+  PUNTO_TURISTICO
+  MUNICIPIO
+  INFOCENTRO
+}
+
+enum EventType {
+  ASAMBLEA_BARRIAL
+  MINGA_COMUNITARIA
+  SIMULACRO_SEGURIDAD
+  REUNION_SEGURIDAD
+  ACTIVIDAD_DEPORTIVA_CULTURAL
+}
+
+enum EventStatus {
+  PROGRAMADO
+  EN_CURSO
+  FINALIZADO
+  CANCELADO
+}
+
+enum VacantHouseStatus {
+  REGISTRADA
+  VIGILANCIA_ACTIVA
+  FINALIZADA
+  CANCELADA
+}
+
+enum IncidentCategory {
+  ROBO_HURTO
+  SOSPECHOSO
+  DISTURBIO_ESCANDALO
+  VIOLENCIA
+  INFRAESTRUCTURA_DANADA
+  ACCIDENTE_TRANSITO
+  EMERGENCIA_MEDICA
+  OTRO
+}
+
+enum IncidentSeverity {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum IncidentStatus {
+  EMITIDA
+  EN_VERIFICACION
+  PATRULLA_DESPACHADA
+  RESUELTA
+  FALSA_ALARMA
+}
+
+model Sector {
+  id              String        @id @default(uuid())
+  name            String
+  code            String        @unique
+  description     String?
+  city            String
+  provinceState   String
+  postalCode      String?
+  centerLat       Float
+  centerLng       Float
+  boundaryGeoJson Json?
+  maxFamilies     Int           @default(250)
+  status          SectorStatus  @default(ACTIVO)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  users           User[]
+  pois            PoiLocation[]
+  events          CommunityEvent[]
+  vacantHouses    VacantHouse[]
+  incidents       IncidentAlert[]
+  auditLogs       AuditLog[]
+
+  @@map("sectors")
+}
+
+model User {
+  id                   String            @id @default(uuid())
+  sectorId             String
+  sector               Sector            @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  nationalId           String            @unique
+  email                String            @unique
+  passwordHash         String
+  firstName            String
+  lastName             String
+  phone                String
+  address              String
+  familyUnitCode       String?
+  role                 Role              @default(RESIDENTE)
+  isActive             Boolean           @default(true)
+  lastLoginAt          DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  createdPois          PoiLocation[]
+  organizedEvents      CommunityEvent[]
+  eventAttendances     EventAttendance[]
+  vacantHouses         VacantHouse[]     @relation("ResidentVacantHouses")
+  inspectionsConducted VacantHouseLog[]  @relation("InspectorLogs")
+  reportedIncidents    IncidentAlert[]   @relation("UserReportedIncidents")
+  incidentUpdates      IncidentUpdate[]
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+model PoiLocation {
+  id           String        @id @default(uuid())
+  sectorId     String
+  sector       Sector        @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  createdById  String
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  name         String
+  type         PoiType
+  description  String?
+  latitude     Float
+  longitude    Float
+  address      String?
+  contactPhone String?
+  openingHours String?
+  attributes   Json?
+  isVerified   Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("poi_locations")
+}
+
+model CommunityEvent {
+  id             String            @id @default(uuid())
+  sectorId       String
+  sector         Sector            @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  organizerId    String
+  organizer      User              @relation(fields: [organizerId], references: [id])
+  title          String
+  description    String
+  eventType      EventType
+  latitude       Float
+  longitude      Float
+  address        String
+  startDate      DateTime
+  endDate        DateTime
+  isPublic       Boolean           @default(true)
+  status         EventStatus       @default(PROGRAMADO)
+  attendeesCount Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  attendances    EventAttendance[]
+
+  @@map("community_events")
+}
+
+model EventAttendance {
+  id          String         @id @default(uuid())
+  eventId     String
+  event       CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  confirmedAt DateTime       @default(now())
+
+  @@unique([eventId, userId])
+  @@map("event_attendances")
+}
+
+model VacantHouse {
+  id                    String            @id @default(uuid())
+  sectorId              String
+  sector                Sector            @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  residentId            String
+  resident              User              @relation("ResidentVacantHouses", fields: [residentId], references: [id], onDelete: Cascade)
+  propertyAddress       String
+  latitude              Float
+  longitude             Float
+  departureDate         DateTime
+  returnDate            DateTime
+  trustedNeighborName   String
+  trustedNeighborPhone  String
+  emergencyContactPhone String
+  specialInstructions   String?
+  status                VacantHouseStatus @default(REGISTRADA)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  inspectionLogs        VacantHouseLog[]
+
+  @@map("vacant_houses")
+}
+
+model VacantHouseLog {
+  id             String      @id @default(uuid())
+  vacantHouseId  String
+  vacantHouse    VacantHouse @relation(fields: [vacantHouseId], references: [id], onDelete: Cascade)
+  inspectorId    String
+  inspector      User        @relation("InspectorLogs", fields: [inspectorId], references: [id])
+  inspectionDate DateTime    @default(now())
+  statusFound    String
+  notes          String
+  createdAt      DateTime    @default(now())
+
+  @@map("vacant_house_logs")
+}
+
+model IncidentAlert {
+  id               String           @id @default(uuid())
+  sectorId         String
+  sector           Sector           @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  reportedById     String
+  reportedBy       User             @relation("UserReportedIncidents", fields: [reportedById], references: [id])
+  code             String           @unique
+  category         IncidentCategory
+  severity         IncidentSeverity
+  title            String
+  description      String
+  latitude         Float
+  longitude        Float
+  addressReference String
+  status           IncidentStatus   @default(EMITIDA)
+  isAnonymous      Boolean          @default(false)
+  evidenceUrls     String[]         @default([])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  updates          IncidentUpdate[]
+
+  @@map("incident_alerts")
+}
+
+model IncidentUpdate {
+  id           String         @id @default(uuid())
+  incidentId   String
+  incident     IncidentAlert  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User           @relation(fields: [authorId], references: [id])
+  status       IncidentStatus
+  comment      String
+  officerBadge String?
+  createdAt    DateTime       @default(now())
+
+  @@map("incident_updates")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  sectorId  String?
+  sector    Sector?  @relation(fields: [sectorId], references: [id])
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  ipAddress String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
